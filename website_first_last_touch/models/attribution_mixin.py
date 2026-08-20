@@ -43,3 +43,63 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
         copy=False,
         groups=ATTRIBUTION_GROUP,
     )
+
+    flt_latest_touch_at = fields.Datetime(
+        string="Latest Acquisition At",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_source = fields.Char(
+        string="First Source",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        index="btree_not_null",
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_source = fields.Char(
+        string="Latest Source",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        index="btree_not_null",
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_medium = fields.Char(
+        string="First Medium",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_medium = fields.Char(
+        string="Latest Medium",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_campaign = fields.Char(
+        string="First Campaign",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_campaign = fields.Char(
+        string="Latest Campaign",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        index="btree_not_null",
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_term = fields.Char(
+        string="First Term",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
