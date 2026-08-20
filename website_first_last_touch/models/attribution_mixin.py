@@ -103,3 +103,88 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
         copy=False,
         groups=ATTRIBUTION_GROUP,
     )
+    flt_latest_term = fields.Char(
+        string="Latest Term",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_content = fields.Char(
+        string="First Content",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_content = fields.Char(
+        string="Latest Content",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_landing_path = fields.Char(
+        string="First Landing Page",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_landing_path = fields.Char(
+        string="Latest Acquisition Landing Page",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_referrer = fields.Char(
+        string="First External Referrer",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_referrer = fields.Char(
+        string="Latest External Referrer",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_click_id_type = fields.Char(
+        string="First Click ID Type",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_click_id_type = fields.Char(
+        string="Latest Click ID Type",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_first_click_id = fields.Char(
+        string="First Click ID",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_latest_click_id = fields.Char(
+        string="Latest Click ID",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        index="btree_not_null",
+        groups=ATTRIBUTION_GROUP,
+    )
+    flt_has_ad_click_id = fields.Boolean(
+        string="Has Ad Click ID",
+        compute="_compute_flt_attribution_summary",
+        store=True,
+        copy=False,
+        groups=ATTRIBUTION_GROUP,
+    )
