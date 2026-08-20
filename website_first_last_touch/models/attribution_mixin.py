@@ -188,3 +188,67 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
         copy=False,
         groups=ATTRIBUTION_GROUP,
     )
+
+    @api.depends("flt_first_touch_data", "flt_latest_touch_data")
+    def _compute_flt_attribution_summary(self):
+        for record in self:
+            first = record._attribution_snapshot_summary(record.flt_first_touch_data)
+            latest = record._attribution_snapshot_summary(record.flt_latest_touch_data)
+            for prefix, summary in (("first", first), ("latest", latest)):
+                setattr(record, f"flt_{prefix}_touch_at", summary["at"])
+                setattr(record, f"flt_{prefix}_source", summary["source"])
+                setattr(record, f"flt_{prefix}_medium", summary["medium"])
+                setattr(record, f"flt_{prefix}_campaign", summary["campaign"])
+                setattr(record, f"flt_{prefix}_term", summary["term"])
+                setattr(record, f"flt_{prefix}_content", summary["content"])
+                setattr(record, f"flt_{prefix}_landing_path", summary["landing_path"])
+                setattr(record, f"flt_{prefix}_referrer", summary["referrer"])
+                setattr(record, f"flt_{prefix}_click_id_type", summary["click_id_type"])
+                setattr(record, f"flt_{prefix}_click_id", summary["click_id"])
+            record.flt_has_ad_click_id = bool(first["click_id"] or latest["click_id"])
+
+    @api.model
+    def _attribution_snapshot_summary(self, snapshot):
+        empty = {
+            "at": False,
+            "source": False,
+            "medium": False,
+            "campaign": False,
+            "term": False,
+            "content": False,
+            "landing_path": False,
+            "referrer": False,
+            "click_id_type": False,
+            "click_id": False,
+        }
+        if not self._attribution_valid_snapshot(snapshot):
+            return empty
+        utm = snapshot.get("utm") if isinstance(snapshot.get("utm"), dict) else {}
+        click_ids = snapshot.get("click_ids") if isinstance(snapshot.get("click_ids"), dict) else {}
+        click_type = next((name for name in CLICK_ID_PARAMETERS if click_ids.get(name)), False)
+        source = utm.get("source")
+        referrer = snapshot.get("referrer")
+        if not source and referrer:
+            source = self._attribution_normalize_host(self._attribution_urlsplit(referrer).hostname)
+        if not source and snapshot.get("kind") == "direct":
+            source = "Direct"
+        return {
+            "at": self._attribution_datetime(snapshot.get("at")),
+            "source": source or False,
+            "medium": utm.get("medium") or False,
+            "campaign": utm.get("campaign") or False,
+            "term": utm.get("term") or False,
+            "content": utm.get("content") or False,
+            "landing_path": snapshot.get("landing_path") or False,
+            "referrer": referrer or False,
+            "click_id_type": click_type,
+            "click_id": click_type and click_ids[click_type] or False,
+        }
+
+    @api.model
+    def _attribution_parameter_names(self):
+        return UTM_PARAMETERS + CLICK_ID_PARAMETERS
+
+    @api.model
+    def _get_attribution_cookie_retention(self):
+        return 31 * 24 * 60 * 60
