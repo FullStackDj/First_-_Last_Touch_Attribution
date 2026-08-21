@@ -1,3 +1,16 @@
+import binascii
+import copy
+import json
+import re
+import unicodedata
+from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qsl, urlsplit
+
+from odoo import api, fields, models
+from odoo.http import request
+from odoo.tools.misc import hash_sign, verify_hash_signed
+
+
 ATTRIBUTION_GROUP = "sales_team.group_sale_salesman"
 ATTRIBUTION_VERSION = 1
 ATTRIBUTION_COOKIE_SCOPE = "website_first_last_touch.cookie"
@@ -252,3 +265,86 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
     @api.model
     def _get_attribution_cookie_retention(self):
         return 31 * 24 * 60 * 60
+
+    @api.model
+    def _get_attribution_cookie_domain(self):
+        return None
+
+    @api.model
+    def _attribution_cookie_name(self, website):
+        return f"odoo_flt_{website.id}"
+
+    @api.model
+    def _attribution_truncate_utf8(self, value, limit):
+        encoded = value.encode("utf-8")
+        if len(encoded) <= limit:
+            return value
+        return encoded[:limit].decode("utf-8", "ignore")
+
+    @api.model
+    def _sanitize_attribution_value(self, name, value):
+        if value is None:
+            return ""
+        value = unicodedata.normalize("NFKC", str(value))
+        value = "".join(char for char in value if not unicodedata.category(char).startswith("C"))
+        value = re.sub(r"\s+", " ", value).strip()
+        if name in CLICK_ID_PARAMETERS:
+            value = self._attribution_truncate_utf8(value, 256)
+            return value if CLICK_ID_PATTERN.fullmatch(value) else ""
+        limits = {
+            "utm_source": 100,
+            "utm_medium": 100,
+            "utm_campaign": 150,
+            "utm_term": 150,
+            "utm_content": 200,
+        }
+        return self._attribution_truncate_utf8(value, limits.get(name, 512))
+
+    @api.model
+    def _attribution_normalize_host(self, value):
+        if not value:
+            return ""
+        value = str(value).strip()
+        if "://" in value:
+            target = value
+        elif value.count(":") >= 2 and not value.startswith("["):
+            target = f"//[{value}]"
+        else:
+            target = f"//{value}"
+        parsed = self._attribution_urlsplit(target)
+        host = parsed.hostname or ""
+        try:
+            host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            return ""
+        return host.lower().rstrip(".")[:253]
+
+    @api.model
+    def _attribution_urlsplit(self, value):
+        try:
+            return urlsplit(str(value or ""))
+        except (TypeError, ValueError):
+            return urlsplit("")
+
+    @api.model
+    def _attribution_current_host(self):
+        return self._attribution_normalize_host(request.httprequest.host_url)
+
+    @api.model
+    def _attribution_normalize_path(self, value, limit=512):
+        value = self._sanitize_attribution_value("path", value or "/")
+        value = re.sub(r"/{2,}", "/", value)
+        if not value.startswith("/"):
+            value = f"/{value}"
+        return self._attribution_truncate_utf8(value, limit) or "/"
+
+    @api.model
+    def _attribution_page_parts(self, page_url, current_host):
+        page_url = self._attribution_truncate_utf8(str(page_url or ""), 4096)
+        try:
+            parsed = urlsplit(page_url)
+        except (TypeError, ValueError):
+            return "", ""
+        if parsed.netloc and self._attribution_normalize_host(parsed.hostname) != current_host:
+            return "", ""
+        return self._attribution_normalize_path(parsed.path), parsed.query
