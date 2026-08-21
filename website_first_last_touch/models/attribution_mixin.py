@@ -348,3 +348,94 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
         if parsed.netloc and self._attribution_normalize_host(parsed.hostname) != current_host:
             return "", ""
         return self._attribution_normalize_path(parsed.path), parsed.query
+
+    @api.model
+    def _attribution_referrer(self, referrer, current_host):
+        referrer = self._attribution_truncate_utf8(str(referrer or ""), 2048)
+        if not referrer:
+            return "", False
+        parsed = self._attribution_urlsplit(referrer)
+        host = self._attribution_normalize_host(parsed.hostname)
+        if parsed.scheme not in ("http", "https") or not host:
+            return "", False
+        if host == current_host:
+            return "", True
+        return f"{parsed.scheme}://{host}", False
+
+    @api.model
+    def _attribution_query_values(self, query):
+        values = {}
+        try:
+            pairs = parse_qsl(query, keep_blank_values=False, max_num_fields=50)
+        except ValueError:
+            return values
+        allowed = set(self._attribution_parameter_names())
+        for name, value in pairs:
+            if name in allowed and name not in values:
+                sanitized = self._sanitize_attribution_value(name, value)
+                if sanitized:
+                    values[name] = sanitized
+        return values
+
+    @api.model
+    def _attribution_compact_snapshot(self, snapshot, aggressive=False):
+        snapshot = copy.deepcopy(snapshot)
+        size = len(json.dumps(snapshot, ensure_ascii=True))
+        if size <= 1400 and not aggressive:
+            return snapshot
+        utm = snapshot.get("utm", {})
+        for key in tuple(utm):
+            if aggressive:
+                limit = 40 if key in ("source", "medium") else 56
+            else:
+                limit = 72 if key in ("source", "medium") else 96
+            utm[key] = self._attribution_truncate_utf8(utm[key], limit)
+        click_ids = snapshot.get("click_ids", {})
+        primary = next((name for name in CLICK_ID_PARAMETERS if click_ids.get(name)), None)
+        if aggressive:
+            snapshot["click_ids"] = {primary: click_ids[primary]} if primary else {}
+        landing_limit = 64 if aggressive else 180
+        snapshot["landing_path"] = self._attribution_truncate_utf8(
+            snapshot.get("landing_path", "/"), landing_limit
+        )
+        if len(json.dumps(snapshot, ensure_ascii=True)) > 1400:
+            utm.pop("content", None)
+        if len(json.dumps(snapshot, ensure_ascii=True)) > 1400:
+            utm.pop("term", None)
+        if len(json.dumps(snapshot, ensure_ascii=True)) > 1400 and primary:
+            snapshot["click_ids"] = {primary: click_ids[primary]}
+        if aggressive and len(json.dumps(snapshot, ensure_ascii=True)) > 1100:
+            utm.pop("content", None)
+        if aggressive and len(json.dumps(snapshot, ensure_ascii=True)) > 1100:
+            utm.pop("term", None)
+        return snapshot
+
+    @api.model
+    def _build_attribution_snapshot(self, page_url, referrer, website_id, current_host, observed_at=None):
+        landing_path, query = self._attribution_page_parts(page_url, current_host)
+        if not landing_path:
+            return None
+        values = self._attribution_query_values(query)
+        utm = {
+            name.removeprefix("utm_"): values[name]
+            for name in UTM_PARAMETERS
+            if values.get(name)
+        }
+        click_ids = {
+            name: values[name]
+            for name in CLICK_ID_PARAMETERS
+            if values.get(name)
+        }
+        external_referrer, internal_referrer = self._attribution_referrer(referrer, current_host)
+        if not utm and not click_ids and not external_referrer and internal_referrer:
+            return None
+        kind = "ad_click" if click_ids else "utm" if utm else "referral" if external_referrer else "direct"
+        snapshot = {
+            "at": fields.Datetime.to_string(observed_at or fields.Datetime.now()),
+            "kind": kind,
+            "landing_path": landing_path,
+            "referrer": external_referrer,
+            "utm": utm,
+            "click_ids": click_ids,
+        }
+        return self._attribution_compact_snapshot(snapshot)
