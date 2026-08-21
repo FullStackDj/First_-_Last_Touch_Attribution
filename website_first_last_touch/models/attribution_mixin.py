@@ -439,3 +439,92 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
             "click_ids": click_ids,
         }
         return self._attribution_compact_snapshot(snapshot)
+
+    @api.model
+    def _is_qualified_attribution_touch(self, snapshot):
+        return isinstance(snapshot, dict) and snapshot.get("kind") in ATTRIBUTION_KINDS - {"direct"}
+
+    @api.model
+    def _attribution_fingerprint(self, snapshot):
+        if not isinstance(snapshot, dict):
+            return ""
+        has_marketing_parameters = bool(snapshot.get("utm") or snapshot.get("click_ids"))
+        data = {
+            "kind": snapshot.get("kind"),
+            "landing_path": snapshot.get("landing_path"),
+            "referrer": False if has_marketing_parameters else snapshot.get("referrer"),
+            "utm": snapshot.get("utm"),
+            "click_ids": snapshot.get("click_ids"),
+        }
+        return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+    @api.model
+    def _should_update_last_touch(self, current_snapshot, candidate):
+        return (
+            self._is_qualified_attribution_touch(candidate)
+            and self._attribution_fingerprint(current_snapshot)
+            != self._attribution_fingerprint(candidate)
+        )
+
+    @api.model
+    def _attribution_datetime(self, value):
+        try:
+            return fields.Datetime.to_datetime(value) if value else False
+        except (TypeError, ValueError):
+            return False
+
+    @api.model
+    def _attribution_valid_snapshot(self, snapshot):
+        if not isinstance(snapshot, dict) or snapshot.get("kind") not in ATTRIBUTION_KINDS:
+            return False
+        if not isinstance(snapshot.get("at"), str) or not self._attribution_datetime(snapshot["at"]):
+            return False
+        if not isinstance(snapshot.get("landing_path"), str) or len(snapshot["landing_path"]) > 512:
+            return False
+        if not isinstance(snapshot.get("referrer", ""), str) or len(snapshot.get("referrer", "")) > 512:
+            return False
+        utm = snapshot.get("utm", {})
+        click_ids = snapshot.get("click_ids", {})
+        if not isinstance(utm, dict) or not isinstance(click_ids, dict):
+            return False
+        if set(utm) - {name.removeprefix("utm_") for name in UTM_PARAMETERS}:
+            return False
+        if set(click_ids) - set(CLICK_ID_PARAMETERS):
+            return False
+        return all(isinstance(value, str) and len(value) <= 512 for value in utm.values()) and all(
+            isinstance(value, str) and len(value) <= 256 for value in click_ids.values()
+        )
+
+    @api.model
+    def _attribution_valid_state(self, state, website_id, current_host):
+        return bool(
+            isinstance(state, dict)
+            and state.get("version") == ATTRIBUTION_VERSION
+            and state.get("website_id") == website_id
+            and state.get("host") == current_host
+            and self._attribution_valid_snapshot(state.get("first"))
+            and (not state.get("latest") or self._attribution_valid_snapshot(state.get("latest")))
+        )
+
+    @api.model
+    def _attribution_merge_state(self, state, candidate, website_id, current_host):
+        if not self._attribution_valid_state(state, website_id, current_host):
+            state = {
+                "version": ATTRIBUTION_VERSION,
+                "website_id": website_id,
+                "host": current_host,
+                "first": False,
+                "latest": False,
+            }
+        else:
+            state = copy.deepcopy(state)
+        if not candidate:
+            return state if state.get("first") else None, False
+        if not state.get("first"):
+            state["first"] = candidate
+            return state, True
+        current_latest = state.get("latest") or state["first"]
+        if self._should_update_last_touch(current_latest, candidate):
+            state["latest"] = candidate
+            return state, True
+        return state, False
