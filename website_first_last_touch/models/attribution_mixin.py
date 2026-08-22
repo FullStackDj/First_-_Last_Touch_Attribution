@@ -56,7 +56,6 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
         copy=False,
         groups=ATTRIBUTION_GROUP,
     )
-
     flt_latest_touch_at = fields.Datetime(
         string="Latest Acquisition At",
         compute="_compute_flt_attribution_summary",
@@ -616,3 +615,126 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
             return bool(request.env["ir.http"]._is_allowed_cookie("optional"))
         except (TypeError, ValueError):
             return False
+
+    @api.model
+    def _attribution_capture(self, response, page_url, referrer):
+        website = request.website
+        cookie_name = self._attribution_cookie_name(website)
+        if not self._attribution_optional_cookies_allowed():
+            if request.cookies.get(cookie_name):
+                self._attribution_delete_cookie(response, website)
+            return None
+        current_host = self._attribution_current_host()
+        if not current_host:
+            return None
+        state, invalid = self._attribution_read_state(website, current_host)
+        candidate = self._build_attribution_snapshot(page_url, referrer, website.id, current_host)
+        state, changed = self._attribution_merge_state(state, candidate, website.id, current_host)
+        if state and (changed or invalid):
+            state = self._attribution_write_cookie(response, website, state)
+        elif invalid:
+            self._attribution_delete_cookie(response, website)
+        return state
+
+    @api.model
+    def _attribution_capture_explicit(self, response, page_url, referrer):
+        return self._attribution_capture(response, page_url, referrer)
+
+    @api.model
+    def _attribution_capture_website_form(self, response):
+        cache_key = "website_first_last_touch.form_state"
+        if cache_key in request.httprequest.environ:
+            return request.httprequest.environ[cache_key]
+        page_url = request.httprequest.url
+        referrer = request.httprequest.referrer or ""
+        current_host = self._attribution_current_host()
+        has_query_touch = any(name in request.httprequest.args for name in self._attribution_parameter_names())
+        referrer_host = self._attribution_normalize_host(self._attribution_urlsplit(referrer).hostname)
+        if not has_query_touch and referrer and referrer_host == current_host:
+            page_url = referrer
+            referrer = ""
+        state = self._attribution_capture(response, page_url, referrer)
+        request.httprequest.environ[cache_key] = state
+        return state
+
+    @api.model
+    def _attribution_capture_eligible(self, response):
+        return bool(
+            getattr(request, "is_frontend", False)
+            and request.httprequest.method == "GET"
+            and getattr(response, "status_code", 0) == 200
+            and getattr(response, "mimetype", "") == "text/html"
+            and not request.httprequest.path.startswith(("/web/", "/website/first-last-touch/capture"))
+        )
+
+    @api.model
+    def _attribution_process_response(self, response):
+        if not getattr(request, "is_frontend", False) or not hasattr(request, "website"):
+            return None
+        website = request.website
+        if not self._attribution_optional_cookies_allowed():
+            if request.cookies.get(self._attribution_cookie_name(website)):
+                self._attribution_delete_cookie(response, website)
+            return None
+        if not self._attribution_capture_eligible(response):
+            return None
+        return self._attribution_capture(
+            response,
+            request.httprequest.url,
+            request.httprequest.referrer or "",
+        )
+
+    @api.model
+    def _attribution_expand_snapshot(self, snapshot, state):
+        if not self._attribution_valid_snapshot(snapshot):
+            return False
+        result = copy.deepcopy(snapshot)
+        result.update({
+            "version": ATTRIBUTION_VERSION,
+            "website_id": state["website_id"],
+            "host": state["host"],
+        })
+        return result
+
+    @api.model
+    def _attribution_values_from_state(self, state):
+        if not isinstance(state, dict) or not state.get("first"):
+            return {}
+        first = self._attribution_expand_snapshot(state["first"], state)
+        latest_source = state.get("latest")
+        if not latest_source and self._is_qualified_attribution_touch(state["first"]):
+            latest_source = state["first"]
+        latest = self._attribution_expand_snapshot(latest_source, state) if latest_source else False
+        if not first:
+            return {}
+        values = {"flt_first_touch_data": first}
+        if latest:
+            values["flt_latest_touch_data"] = latest
+        return values
+
+    def _prepare_partner_attribution(self):
+        self.ensure_one()
+        return {
+            "flt_first_touch_data": copy.deepcopy(self.flt_first_touch_data),
+            "flt_latest_touch_data": copy.deepcopy(self.flt_latest_touch_data),
+        } if self.flt_first_touch_data else {}
+
+    def _prepare_sale_attribution(self):
+        self.ensure_one()
+        return self._prepare_partner_attribution()
+
+    @api.model
+    def _merge_attribution_snapshots(self, snapshots, latest=False):
+        valid = [
+            snapshot
+            for snapshot in snapshots
+            if self._attribution_valid_snapshot(snapshot)
+            and (not latest or self._is_qualified_attribution_touch(snapshot))
+        ]
+        if not valid:
+            return False
+        return copy.deepcopy(
+            max(valid, key=lambda item: self._attribution_datetime(item["at"]))
+            if latest
+            else min(valid, key=lambda item: self._attribution_datetime(item["at"]))
+        )
