@@ -528,3 +528,91 @@ class WebsiteFirstLastTouchMixin(models.AbstractModel):
             state["latest"] = candidate
             return state, True
         return state, False
+
+    @api.model
+    def _attribution_sign_state(self, state):
+        retention = self._get_attribution_cookie_retention()
+        token = hash_sign(
+            self.env(su=True),
+            ATTRIBUTION_COOKIE_SCOPE,
+            state,
+            expiration=timedelta(seconds=retention),
+        )
+        if len(token) <= ATTRIBUTION_COOKIE_LIMIT:
+            return token, state
+        compact = copy.deepcopy(state)
+        compact["first"] = self._attribution_compact_snapshot(compact["first"], aggressive=True)
+        if compact.get("latest"):
+            compact["latest"] = self._attribution_compact_snapshot(compact["latest"], aggressive=True)
+        token = hash_sign(
+            self.env(su=True),
+            ATTRIBUTION_COOKIE_SCOPE,
+            compact,
+            expiration=timedelta(seconds=retention),
+        )
+        return (token, compact) if len(token) <= ATTRIBUTION_COOKIE_LIMIT else (None, None)
+
+    @api.model
+    def _attribution_decode_state(self, raw, website_id, current_host):
+        if not raw:
+            return None, False
+        if not isinstance(raw, str) or len(raw) > ATTRIBUTION_COOKIE_LIMIT:
+            return None, True
+        try:
+            state = verify_hash_signed(self.env(su=True), ATTRIBUTION_COOKIE_SCOPE, raw)
+        except (ValueError, TypeError, UnicodeError, binascii.Error, json.JSONDecodeError):
+            return None, True
+        if not self._attribution_valid_state(state, website_id, current_host):
+            return None, True
+        return state, False
+
+    @api.model
+    def _attribution_read_state(self, website, current_host):
+        return self._attribution_decode_state(
+            request.cookies.get(self._attribution_cookie_name(website)),
+            website.id,
+            current_host,
+        )
+
+    @api.model
+    def _attribution_delete_cookie(self, response, website):
+        response.set_cookie(
+            self._attribution_cookie_name(website),
+            "",
+            max_age=0,
+            expires=0,
+            path="/",
+            domain=self._get_attribution_cookie_domain(),
+            secure=bool(request.httprequest.is_secure),
+            httponly=True,
+            samesite="Lax",
+            cookie_type="required",
+        )
+
+    @api.model
+    def _attribution_write_cookie(self, response, website, state):
+        token, fitted_state = self._attribution_sign_state(state)
+        if not token:
+            self._attribution_delete_cookie(response, website)
+            return None
+        retention = self._get_attribution_cookie_retention()
+        response.set_cookie(
+            self._attribution_cookie_name(website),
+            token,
+            max_age=retention,
+            expires=datetime.now(timezone.utc) + timedelta(seconds=retention),
+            path="/",
+            domain=self._get_attribution_cookie_domain(),
+            secure=bool(request.httprequest.is_secure),
+            httponly=True,
+            samesite="Lax",
+            cookie_type="optional",
+        )
+        return fitted_state
+
+    @api.model
+    def _attribution_optional_cookies_allowed(self):
+        try:
+            return bool(request.env["ir.http"]._is_allowed_cookie("optional"))
+        except (TypeError, ValueError):
+            return False
