@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_first_last_touch" model="ir.ui.view">
+        <field name="name">res.partner.form.first.last.touch</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page
+                    string="Acquisition"
+                    name="first_last_touch_acquisition"
+                    groups="sales_team.group_sale_salesman"
+                    invisible="not flt_first_touch_data">
+                    <field name="flt_first_touch_data" invisible="1"/>
+                    <field name="flt_latest_touch_data" invisible="1"/>
+                    <group>
+                        <group string="First Touch">
+                            <field name="flt_first_touch_at"/>
+                            <field name="flt_first_source"/>
+                            <field name="flt_first_medium"/>
+                            <field name="flt_first_campaign"/>
+                            <field name="flt_first_click_id_type"/>
+                            <field name="flt_first_click_id"/>
+                            <field name="flt_first_landing_path"/>
+                        </group>
+                        <group string="Latest at Customer Creation">
+                            <field name="flt_latest_touch_at"/>
+                            <field name="flt_latest_source"/>
+                            <field name="flt_latest_medium"/>
+                            <field name="flt_latest_campaign"/>
+                            <field name="flt_latest_click_id_type"/>
+                            <field name="flt_latest_click_id"/>
+                            <field name="flt_latest_landing_path"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
