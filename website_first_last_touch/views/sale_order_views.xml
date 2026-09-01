@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_first_last_touch" model="ir.ui.view">
+        <field name="name">sale.order.form.first.last.touch</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page
+                    string="Attribution"
+                    name="first_last_touch_attribution"
+                    groups="sales_team.group_sale_salesman"
+                    invisible="not flt_first_touch_data and not flt_latest_touch_data">
+                    <field name="flt_first_touch_data" invisible="1"/>
+                    <field name="flt_latest_touch_data" invisible="1"/>
+                    <group>
+                        <group string="First Touch">
+                            <field name="flt_first_touch_at"/>
+                            <field name="flt_first_source"/>
+                            <field name="flt_first_medium"/>
+                            <field name="flt_first_campaign"/>
+                            <field name="flt_first_term"/>
+                            <field name="flt_first_content"/>
+                            <field name="flt_first_click_id_type"/>
+                            <field name="flt_first_click_id"/>
+                            <field name="flt_first_landing_path"/>
+                            <field name="flt_first_referrer" widget="url"/>
+                        </group>
+                        <group string="Latest Qualified Acquisition">
+                            <field name="flt_latest_touch_at"/>
+                            <field name="flt_latest_source"/>
+                            <field name="flt_latest_medium"/>
+                            <field name="flt_latest_campaign"/>
+                            <field name="flt_latest_term"/>
+                            <field name="flt_latest_content"/>
+                            <field name="flt_latest_click_id_type"/>
+                            <field name="flt_latest_click_id"/>
+                            <field name="flt_latest_landing_path"/>
+                            <field name="flt_latest_referrer" widget="url"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="sale_order_tree_first_last_touch" model="ir.ui.view">
+        <field name="name">sale.order.list.first.last.touch</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.sale_order_tree"/>
+        <field name="arch" type="xml">
+            <field name="partner_id" position="after">
+                <field name="flt_first_source" optional="hide"/>
+                <field name="flt_latest_source" optional="hide"/>
+                <field name="flt_latest_campaign" optional="hide"/>
+                <field name="flt_latest_touch_at" optional="hide"/>
+                <field name="flt_latest_click_id_type" optional="hide"/>
+                <field name="flt_latest_click_id" optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_sales_order_filter_first_last_touch" model="ir.ui.view">
+        <field name="name">sale.order.search.first.last.touch</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            <field name="partner_id" position="after">
+                <field name="flt_first_source"/>
+                <field name="flt_latest_source"/>
+                <field name="flt_latest_campaign"/>
+                <field name="flt_latest_click_id"/>
+                <separator/>
+                <filter string="Attributed" name="has_first_touch" domain="[('flt_first_touch_at', '!=', False)]"/>
+                <filter string="Has Ad Click ID" name="has_ad_click_id" domain="[('flt_has_ad_click_id', '=', True)]"/>
+            </field>
+            <xpath expr="//search/group" position="inside">
+                <filter string="First Source" name="group_by_flt_first_source"
+                        context="{'group_by': 'flt_first_source'}"/>
+                <filter string="Latest Source" name="group_by_flt_latest_source"
+                        context="{'group_by': 'flt_latest_source'}"/>
+                <filter string="Latest Campaign" name="group_by_flt_latest_campaign"
+                        context="{'group_by': 'flt_latest_campaign'}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
