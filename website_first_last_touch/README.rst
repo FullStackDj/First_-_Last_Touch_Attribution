@@ -187,3 +187,94 @@ A First Touch can contain:
 * A sanitized external referrer.
 * The acquisition timestamp.
 * Direct classification when no qualified acquisition data is present.
+
+Latest Qualified Acquisition
+----------------------------
+
+Latest Qualified Acquisition answers a different question: **what was the most
+recent meaningful acquisition source before conversion?**
+
+A later touch can replace this snapshot when it contains at least one supported
+UTM value, a supported advertising click ID, or a valid external referrer.
+Ordinary Direct requests and internal navigation do not replace it.
+
+Repeated identical acquisition data is also handled carefully. The module does
+not refresh the stored timestamp only because the same campaign is observed
+again. A genuinely different qualified touch can create a new Latest Qualified
+Acquisition while the First Touch remains unchanged.
+
+UTM and Advertising Click IDs
+-----------------------------
+
+Supported UTM parameters:
+
+::
+
+   utm_source
+   utm_medium
+   utm_campaign
+   utm_term
+   utm_content
+
+Supported advertising click IDs:
+
+::
+
+   gclid
+   gbraid
+   wbraid
+   fbclid
+   msclkid
+
+These values are stored as part of the complete acquisition snapshot. A later
+partial UTM request does not borrow missing source, medium, or campaign values
+from an earlier visit. This prevents a false combination that never existed in a
+real Website request.
+
+The module also keeps Odoo's native campaign, source, and medium fields working.
+It does not replace the standard UTM framework or globally modify every model
+that inherits ``utm.mixin``.
+
+Website Forms and CRM
+---------------------
+
+The module integrates with the standard Odoo Website Form pipeline. A normal
+Website CRM form can create the lead or Opportunity without custom attribution
+fields in the form markup.
+
+The attribution available for the current Website request is applied at the
+Website Form boundary before the CRM record is created. This also covers a
+same-request conversion where a visitor opens a campaign URL and submits the
+form without first navigating to another page.
+
+Browser attribution is not read by arbitrary backend creates. A lead created
+manually, through an import, RPC/API call, or unrelated backend workflow does
+not receive Website attribution merely because a browser cookie exists in the
+current session.
+
+Customer and Sales Propagation
+------------------------------
+
+Attribution remains useful after the lead has moved deeper into the commercial
+workflow.
+
+**New Customer**
+  When CRM creates a new customer from an attributed Opportunity, the First
+  Touch and Latest Qualified Acquisition are copied to that new customer. The
+  customer keeps the acquisition context available at the time of creation.
+
+**Existing Customer**
+  Assigning an Opportunity to an existing customer does not overwrite that
+  customer's stored attribution. An established customer may have several
+  Opportunities and campaigns, so the newest lead is not treated as the event
+  that originally acquired the partner.
+
+**Quotation and Sales Order**
+  When a quotation is created from an attributed Opportunity through the normal
+  CRM sales flow, the complete snapshots are carried into the quotation. The
+  attribution then remains visible on the Sales Order created from that
+  quotation.
+
+A plain backend Sales Order creation does not read browser state or invent
+attribution only because an Opportunity reference is present.
+
