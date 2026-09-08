@@ -87,3 +87,103 @@ content, landing page, referrer, click ID, and timestamp stay together instead
 of being mixed between different visits. The result is attribution that remains
 understandable when the lead becomes a customer and the opportunity becomes a
 sale.
+
+Key Features
+------------
+
+* First Touch stays stable even when the visitor returns later through Direct
+  traffic or another campaign.
+* Latest Qualified Acquisition keeps the most recent meaningful UTM, ad-click,
+  or external-referral source without rewarding ordinary navigation.
+* Attribution follows the business flow from Website forms to CRM, a newly
+  created customer, quotation, and Sales Order.
+* UTM source, medium, campaign, term, and content remain together as one
+  acquisition snapshot.
+* Google Ads ``gclid``, ``gbraid``, and ``wbraid``, Meta / Facebook ``fbclid``,
+  and Microsoft Ads ``msclkid`` are supported.
+* Landing page and external referrer are preserved with privacy-focused URL
+  normalization.
+* Standard Website CRM forms work without custom hidden attribution fields.
+* CRM and Sales records expose searchable acquisition fields for daily use.
+* Native Odoo campaign, source, and medium behavior remains available.
+* Existing customers are protected from being overwritten by a new lead's
+  acquisition history.
+* Lead merges preserve the earliest complete First Touch and latest complete
+  qualified acquisition.
+* Duplicated leads, customers, and quotations do not inherit stale attribution.
+* Consent-aware first-party state is signed and isolated by Website and host.
+* Attribution fields are restricted to authorized Sales users.
+* No external attribution SaaS, mandatory API key, tracking pixel, or
+  third-party Python library is required.
+
+Requirements and Installation
+-----------------------------
+
+The module can be installed in Odoo environments that allow custom Python
+modules, including Odoo.sh, on-premise installations, and other self-hosted
+deployments. Odoo Online does not support third-party Python modules.
+
+The module depends on the standard ``website_crm`` and ``sale_crm``
+applications.
+
+#. Copy ``website_first_last_touch`` into an Odoo add-ons path.
+#. Restart the Odoo service and update the Apps list.
+#. Install **First & Last Touch Attribution - UTM & CRM Tracking**.
+#. Confirm that the Website form used for lead generation creates CRM records
+   through the standard Odoo Website Form flow.
+#. If the Website cookie bar is enabled, keep the standard optional-cookie
+   consent flow active. The module follows that decision automatically.
+
+No separate attribution-rule setup is required for normal use. Once installed,
+the module works with the standard Website CRM flow and exposes the captured
+acquisition on the supported CRM, Customer, and Sales records.
+
+How Attribution Works
+---------------------
+
+A normal journey can look like this:
+
+::
+
+   Google Ads visit
+       -> First Touch = google / cpc / spring
+       -> Latest Qualified Acquisition = google / cpc / spring
+
+   Direct return
+       -> First Touch stays Google
+       -> Latest Qualified Acquisition stays Google
+
+   LinkedIn campaign
+       -> First Touch stays Google
+       -> Latest Qualified Acquisition becomes LinkedIn
+
+   Website form submission
+       -> CRM Opportunity receives both snapshots
+       -> New customer can receive the same attribution
+       -> Quotation / Sales Order can keep the acquisition context
+
+This is the central behavior of the module: Direct can be a genuine First Touch,
+but a later Direct return does not steal credit from a known qualified campaign.
+Marketing keeps the source, and Sales keeps the context on the record it already
+uses.
+
+First Touch
+-----------
+
+First Touch answers the question: **what was the first Website entry that this
+module was allowed to observe for this visitor?**
+
+The first valid touch is written once. A later campaign, referral, reload, or
+Direct visit cannot replace it. When optional-cookie consent is required, the
+module records only information that is available after Odoo permits optional
+cookie storage. It does not reconstruct a visit that occurred before capture was
+allowed.
+
+A First Touch can contain:
+
+* UTM source, medium, campaign, term, and content.
+* A supported advertising click ID.
+* A normalized landing path.
+* A sanitized external referrer.
+* The acquisition timestamp.
+* Direct classification when no qualified acquisition data is present.
