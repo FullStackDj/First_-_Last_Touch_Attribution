@@ -278,3 +278,113 @@ workflow.
 A plain backend Sales Order creation does not read browser state or invent
 attribution only because an Opportunity reference is present.
 
+Lead Merge and Copy Safety
+--------------------------
+
+CRM merges are handled chronologically. When several leads contain attribution,
+the merged record keeps the earliest valid complete First Touch and the latest
+valid complete qualified acquisition. The module selects complete snapshots
+rather than combining individual UTM fields from different leads.
+
+Attribution fields use copy protection. Duplicating an attributed lead,
+customer, or quotation does not manufacture a second business record with the
+same acquisition history. Quotation duplication is also protected from stale
+attribution defaults that may still be present in an action context.
+
+Consent, Privacy, and Browser State
+-----------------------------------
+
+The browser-side attribution state follows the standard Odoo Website optional
+cookie decision. The module does not introduce a second consent banner or use a
+separate browser-storage method to bypass the user's choice.
+
+The attribution state uses a signed first-party cookie isolated by Website. The
+cookie is HttpOnly, host-only, uses SameSite=Lax, becomes Secure under HTTPS,
+and has a default retention period of 31 days.
+
+The module intentionally minimizes stored URL information:
+
+* Landing pages are normalized to the path.
+* Arbitrary landing-page query parameters are not stored.
+* Same-site referrers are treated as internal navigation.
+* External referrers are reduced to their origin without path, query, or
+  fragment.
+* Foreign-host and malformed page values are not trusted as local attribution.
+
+The addon does not use IP address, browser fingerprint, user agent, form email,
+or form phone as an attribution identity layer.
+
+Security and Reliability
+------------------------
+
+The serialized browser state is signed and validated before use. The validation
+covers the expected structure, supported data, Website ID, host, and size
+boundaries. Modified or incorrectly scoped state is discarded instead of being
+trusted.
+
+Attribution fields are protected at model level for the standard Sales user
+group and are also controlled in the corresponding views. Public users and
+internal employees without Sales access cannot explicitly read these protected
+fields through ordinary ORM access.
+
+The application keeps the standard Odoo Website, CRM, Sales, UTM, and access
+control flows as the source of truth. It adds attribution continuity around
+those workflows instead of replacing them.
+
+Search and Daily Use
+--------------------
+
+Authorized users can review acquisition information directly on the supported
+business records:
+
+* CRM Lead / Opportunity — First Touch and Latest Qualified Acquisition.
+* Customer — Acquisition information when the customer was created from the
+  attributed Opportunity.
+* Quotation / Sales Order — attribution carried from the Opportunity through
+  the normal CRM sales flow.
+
+Searchable summary fields make it possible to locate attributed records by
+values such as First Source, Latest Source, Latest Campaign, and stored click-ID
+context without reading the raw attribution snapshot.
+
+Scope and Limitations
+---------------------
+
+* The module keeps First Touch and one Latest Qualified Acquisition; it is not a
+  complete page-view or multi-touch event-history system.
+* It does not import advertising spend or calculate ROAS.
+* It does not upload offline conversions to Google Ads, Meta, or Microsoft Ads.
+* It does not provide cross-device visitor identity or browser fingerprinting.
+* It does not replace Odoo Link Tracker or the native UTM framework.
+* External Websites such as WordPress or WooCommerce require a separate
+  integration before their browser context can enter this Odoo Website flow.
+* Event, eCommerce, call-tracking, channel-classification, and advertising API
+  integrations are outside the base module.
+* When optional-cookie consent is required, the module cannot reconstruct
+  acquisition data that disappeared before consent allowed capture.
+
+Validation Summary
+------------------
+
+The completed implementation was validated through 27 functional and technical
+scenarios covering Direct, UTM, advertising click IDs, referrals, sanitization,
+signed state, consent, same-request Website forms, native Odoo UTM compatibility,
+CRM search, lead merge, customer and Sales propagation, duplication, security,
+and the complete browser conversion path.
+
+The deep server-side QA suite completed all 139 assertions successfully. The
+final Python/HttpCase suite completed nine tests with zero failures and zero
+errors, both Hoot JavaScript tests passed in the Odoo test runner, and the real
+browser scenario confirmed the complete path from optional-cookie consent to
+signed attribution state, standard Website form submission, and the expected CRM
+record.
+
+Technical Information
+---------------------
+
+* Technical name: ``website_first_last_touch``
+* Dependencies: ``website_crm``, ``sale_crm``
+* License: ``LGPL-3``
+* Documentation: ``doc`` folder
+* Technical report: `Google Drive <https://drive.google.com/file/d/1Z8PI5bj6_TcQ-n-UBsaSyxwwIE6CKrcg/view?usp=drive_link>`_
+* Support: `full.stack.odoo@gmail.com <mailto:full.stack.odoo@gmail.com>`_
